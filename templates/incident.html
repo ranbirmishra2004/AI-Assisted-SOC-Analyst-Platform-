@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Case #{{incident.id}} · SOC Analyst</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<main>
+  <div class="page-header">
+    <a href="/">← Incident queue</a>
+    <div>
+      Signed in as <b>{{current_user.username}}</b> ({{current_user.role}})
+      <form method="post" action="/logout">
+        <input type="hidden" name="csrf_token" value="{{csrf_token}}">
+        <button type="submit">Sign out</button>
+      </form>
+    </div>
+  </div>
+  <header class="page-header case-header">
+    <div><p class="eyebrow">CASE #{{incident.id}}</p><h1>{{incident.attack_type}}</h1><p>{{incident.filename}}</p></div>
+    <a class="button secondary" href="/report/{{incident.id}}">Download report</a>
+  </header>
+
+  <div class="grid">
+    <section class="card">
+      <h2>Detection &amp; evidence</h2>
+      <p><b>Severity:</b> <span class="badge severity-{{incident.severity|lower}}">{{incident.severity}}</span></p>
+      <p><b>Rule risk score:</b> <span class="risk">{% if incident.risk_score >= 0 %}{{incident.risk_score}}/100{% else %}Not scored{% endif %}</span></p>
+      <p><b>Source IP:</b> {{incident.source_ip}}</p>
+      <p><b>Affected user:</b> {{incident.affected_user}}</p>
+      <p><b>Observed:</b> {{incident.summary}}</p>
+      <h3>Detection signals</h3>
+      {% if incident.detection_evidence %}
+      <ul>{% for item in incident.detection_evidence %}<li>{{item}}</li>{% endfor %}</ul>
+      {% else %}<p>No detection signals recorded.</p>{% endif %}
+      {% if incident.alert_tags %}
+      <div class="tags">{% for tag in incident.alert_tags %}<span class="tag">{{tag}}</span>{% endfor %}</div>
+      {% endif %}
+    </section>
+    <section class="card">
+      <h2>Rule-based assessment</h2>
+      <p>{{incident.assessment.get("executive_summary", "No assessment is available for this incident.")}}</p>
+      <p><b>Analysis source:</b> {{incident.assessment.get("analysis_source", "Detection Rules")}}</p>
+      <p><b>MITRE ATT&amp;CK:</b> {{incident.assessment.get("mitre_attack", "Requires analyst validation")}}</p>
+      <h3>Why it may be suspicious</h3>
+      <ul>{% for item in incident.assessment.get("why_suspicious", []) %}<li>{{item}}</li>{% else %}<li>Analyst review recommended.</li>{% endfor %}</ul>
+      <h3>Suggested next steps</h3>
+      <ol>{% for item in incident.assessment.get("recommended_actions", []) %}<li>{{item}}</li>{% else %}<li>Validate the evidence and correlate related logs.</li>{% endfor %}</ol>
+      <p class="notice">Rule-based results are starter detections, not a production SIEM. Verify evidence and follow your incident-response procedures.</p>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>Case workflow</h2>
+    <form id="workflow-form" class="workflow-form">
+      <label>Status
+        <select name="status">
+          {% for value in ["New", "Triaging", "Contained", "Resolved", "Closed"] %}
+          <option value="{{value}}" {% if incident.status == value %}selected{% endif %}>{{value}}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Assignee
+        <input name="assigned_to" maxlength="100" value="{{incident.assigned_to}}" placeholder="Analyst or team">
+      </label>
+      <label class="note-field">Investigation note
+        <textarea name="note" maxlength="2000" rows="3" placeholder="Record evidence, decisions or follow-up…"></textarea>
+      </label>
+      <button type="submit">Save case update</button>
+    </form>
+    <p id="workflow-status" role="status"></p>
+    <h3>Investigation notes</h3>
+    <ul class="notes">
+      {% for note in incident.notes %}
+      <li><span>{{note.text}}</span><small>{{note.created_at}}</small></li>
+      {% else %}<li>No analyst notes yet.</li>{% endfor %}
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>Indicators of compromise</h2>
+    <pre>{{incident.iocs|tojson(indent=2)}}</pre>
+  </section>
+
+  <section class="card">
+    <h2>Ask about this case</h2>
+    <p>Answers are generated locally from the case evidence using deterministic rules.</p>
+    <form id="chat-form" class="chat-form">
+      <input id="question" maxlength="2000" placeholder="e.g. What evidence supports this alert?" required>
+      <button type="submit">Ask</button>
+    </form>
+    <p id="chat-status" role="status"></p>
+    <pre id="answer" aria-live="polite"></pre>
+  </section>
+
+  <section class="card">
+    <h2>Evidence timeline</h2>
+    <ol class="timeline">
+      {% for event in incident.events %}
+      <li><span class="tag">{{event.event_type}}</span><pre>{{event.raw}}</pre></li>
+      {% else %}<li>No log events were parsed.</li>{% endfor %}
+    </ol>
+  </section>
+</main>
+<script>
+const caseId = {{incident.id}};
+const csrfToken = {{csrf_token|tojson}};
+document.getElementById("workflow-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const status = document.getElementById("workflow-status");
+  const data = Object.fromEntries(new FormData(form));
+  try {
+    const response = await fetch(`/api/incidents/${caseId}/workflow`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-CSRF-Token": csrfToken},
+      body: JSON.stringify(data)
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Could not save this update.");
+    location.reload();
+  } catch (error) {
+    status.textContent = error.message;
+  }
+});
+
+document.getElementById("chat-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  const status = document.getElementById("chat-status");
+  const answer = document.getElementById("answer");
+  status.textContent = "";
+  answer.textContent = "";
+  try {
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-CSRF-Token": csrfToken},
+      body: JSON.stringify({incident_id: caseId, question: document.getElementById("question").value})
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Could not answer this question.");
+    status.textContent = result.notice || `Response source: ${result.source}`;
+    answer.textContent = result.answer;
+  } catch (error) {
+    status.textContent = error.message;
+  }
+});
+</script>
+</body>
+</html>

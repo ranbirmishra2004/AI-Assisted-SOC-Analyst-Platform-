@@ -1,0 +1,6 @@
+Oct 21 10:01:01 kali sshd: Failed password from 192.168.1.50 for admin
+Oct 21 10:01:03 kali sshd: Failed password from 192.168.1.50 for admin
+Oct 21 10:01:05 kali sshd: Failed password from 192.168.1.50 for admin
+Oct 21 10:01:07 kali sshd: Failed password from 192.168.1.50 for admin
+Oct 21 10:01:09 kali sshd: Failed password from 192.168.1.50 for admin
+Oct 21 10:01:12 kali sshd: Accepted password from 192.168.1.50 for admin

@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SOC Analyst Platform</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<main>
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">LOCAL SECURITY OPERATIONS</p>
+      <h1>SOC Analyst Platform</h1>
+      <p>Investigate log evidence with transparent, deterministic detection rules.</p>
+    </div>
+    <div class="status-banner">
+      Signed in as <b>{{current_user.username}}</b> ({{current_user.role}})
+      {% if current_user.role == "admin" %}<p><a href="/admin/audit-events">Audit trail (JSON)</a></p>{% endif %}
+      <form method="post" action="/logout">
+        <input type="hidden" name="csrf_token" value="{{csrf_token}}">
+        <button type="submit">Sign out</button>
+      </form>
+    </div>
+  </header>
+
+  <section class="feature-showcase" aria-label="Platform features">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">Key capabilities</p>
+        <h2>Core features that matter most</h2>
+      </div>
+    </div>
+    <div class="feature-grid">
+      <article class="feature-item">
+        <span class="feature-number">01</span>
+        <h3>Structured log ingestion</h3>
+        <p>Upload UTF-8 text or newline-delimited JSON security logs up to 3 MB and analyze them locally.</p>
+      </article>
+      <article class="feature-item">
+        <span class="feature-number">02</span>
+        <h3>Entity extraction</h3>
+        <p>Detect IP addresses, usernames, URLs, hashes, and other indicators from raw evidence.</p>
+      </article>
+      <article class="feature-item">
+        <span class="feature-number">03</span>
+        <h3>Deterministic detection</h3>
+        <p>Correlate authentication failures in a 10-minute window and detect suspicious PowerShell, ransomware indicators, and known malicious strings.</p>
+      </article>
+      <article class="feature-item">
+        <span class="feature-number">04</span>
+        <h3>Risk scoring</h3>
+        <p>Assign a consistent 0–100 risk score and map each finding to a clear severity tier.</p>
+      </article>
+      <article class="feature-item">
+        <span class="feature-number">05</span>
+        <h3>Incident case tracking</h3>
+        <p>Create, view, and manage case records with structured evidence, status, and source metadata.</p>
+      </article>
+      <article class="feature-item">
+        <span class="feature-number">06</span>
+        <h3>Queue filtering</h3>
+        <p>Search incidents by file name, attack type, IP, user, severity, date range, and workflow status.</p>
+      </article>
+      <article class="feature-item">
+        <span class="feature-number">07</span>
+        <h3>Workflow updates</h3>
+        <p>Update a single case inline or apply bulk status changes to multiple selected incidents.</p>
+      </article>
+      <article class="feature-item">
+        <span class="feature-number">08</span>
+        <h3>Investigation notes</h3>
+        <p>Record assignees and investigation notes so analysts can track actions and ownership.</p>
+      </article>
+      <article class="feature-item">
+        <span class="feature-number">09</span>
+        <h3>Evidence export</h3>
+        <p>Export filtered incident data as CSV or JSON and surface more detailed reporting for stakeholders.</p>
+      </article>
+      <article class="feature-item">
+        <span class="feature-number">10</span>
+        <h3>Local-first security</h3>
+        <p>Keep evidence handling local, transparent, and operational without requiring external AI or hosted services.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="insight-bar" aria-label="Operational insights">
+    {% for card in insight_cards %}
+    <article class="insight-card">
+      <span>{{ card.title }}</span>
+      <strong>{{ card.value }}</strong>
+      <small>{{ card.meta }}</small>
+    </article>
+    {% endfor %}
+  </section>
+
+  <section class="metrics" aria-label="Incident metrics">
+    <article class="metric"><span>Total cases</span><strong>{{counts.total}}</strong></article>
+    <article class="metric"><span>Open cases</span><strong>{{counts.open}}</strong></article>
+    <article class="metric critical"><span>Critical</span><strong>{{counts.critical}}</strong></article>
+    <article class="metric high"><span>High</span><strong>{{counts.high}}</strong></article>
+  </section>
+
+  <section class="charts" aria-label="Incident charts">
+    <article class="card chart-card">
+      <h2>Daily incident trend</h2>
+      <p>Matching incidents created in the selected window (up to 14 days).</p>
+      <div class="bar-chart">
+        {% for item in trend %}
+        <div class="bar-row">
+          <span>{{item.date}}</span>
+          <div class="bar-track" role="img" aria-label="{{item.count}} incident(s)">
+            <span style="width: {{item.width}}%"></span>
+          </div>
+          <b>{{item.count}}</b>
+        </div>
+        {% endfor %}
+      </div>
+    </article>
+    <article class="card chart-card">
+      <h2>Severity breakdown</h2>
+      <p>Matching incidents grouped by rule-assigned severity.</p>
+      <div class="bar-chart">
+        {% for item in severity_counts %}
+        <div class="bar-row">
+          <span>{{item.name}}</span>
+          <div class="bar-track severity-track severity-{{item.name|lower}}" role="img" aria-label="{{item.count}} incident(s)">
+            <span style="width: {{item.width}}%"></span>
+          </div>
+          <b>{{item.count}}</b>
+        </div>
+        {% endfor %}
+      </div>
+    </article>
+  </section>
+
+  <section class="card">
+    <h2>Analyze a security log</h2>
+    <p>Upload a UTF-8 text log (maximum 3 MB). Evidence is analyzed locally using deterministic rules.</p>
+    <form id="upload-form">
+      <input type="file" name="logfile" accept=".log,.txt,.csv,text/plain" required>
+      <button type="submit">Analyze evidence</button>
+    </form>
+    <p id="upload-status" role="status"></p>
+  </section>
+
+  <section class="card">
+    <div class="section-heading">
+      <div>
+        <h2>Incident queue</h2>
+        <p>{{incidents|length}} matching case(s)</p>
+      </div>
+    </div>
+    <form method="get" class="filters">
+      <input type="search" name="q" value="{{search}}" placeholder="Search filename, attack, IP or user">
+      <select name="period" aria-label="Filter by date">
+        {% for value, days in periods.items() %}
+        <option value="{{value}}" {% if selected_period == value %}selected{% endif %}>{% if value == "all" %}All time{% else %}Last {{value}} days{% endif %}</option>
+        {% endfor %}
+      </select>
+      <select name="severity" aria-label="Filter by severity">
+        <option value="">All severities</option>
+        {% for level in ["Critical", "High", "Medium", "Low", "Info"] %}
+        <option value="{{level}}" {% if selected_severity == level %}selected{% endif %}>{{level}}</option>
+        {% endfor %}
+      </select>
+      <select name="status" aria-label="Filter by status">
+        <option value="">All statuses</option>
+        {% for value in statuses %}
+        <option value="{{value}}" {% if selected_status == value %}selected{% endif %}>{{value}}</option>
+        {% endfor %}
+      </select>
+      <select name="risk_min" aria-label="Minimum risk score">
+        <option value="0" {% if selected_risk_min == 0 %}selected{% endif %}>Risk 0+</option>
+        <option value="25" {% if selected_risk_min == 25 %}selected{% endif %}>Risk 25+</option>
+        <option value="50" {% if selected_risk_min == 50 %}selected{% endif %}>Risk 50+</option>
+        <option value="75" {% if selected_risk_min == 75 %}selected{% endif %}>Risk 75+</option>
+      </select>
+      <select name="sort" aria-label="Sort incidents">
+        <option value="newest" {% if selected_sort == "newest" %}selected{% endif %}>Newest first</option>
+        <option value="risk" {% if selected_sort == "risk" %}selected{% endif %}>Highest risk</option>
+        <option value="severity" {% if selected_sort == "severity" %}selected{% endif %}>Severity</option>
+      </select>
+      <button type="submit">Filter</button>
+      <a class="button secondary" href="/">Clear</a>
+    </form>
+    <div class="export-actions">
+      <a class="button secondary" href="/export/incidents.csv?q={{search|urlencode}}&amp;period={{selected_period}}&amp;severity={{selected_severity|urlencode}}&amp;status={{selected_status|urlencode}}&amp;risk_min={{selected_risk_min}}&amp;sort={{selected_sort}}">Export CSV</a>
+      <a class="button secondary" href="/export/incidents.json?q={{search|urlencode}}&amp;period={{selected_period}}&amp;severity={{selected_severity|urlencode}}&amp;status={{selected_status|urlencode}}&amp;risk_min={{selected_risk_min}}&amp;sort={{selected_sort}}">Export JSON</a>
+    </div>
+    <form id="bulk-workflow-form" class="bulk-form">
+      <strong>Bulk update selected cases</strong>
+      <select name="status" aria-label="Bulk status" required>
+        {% for value in statuses %}<option value="{{value}}">{{value}}</option>{% endfor %}
+      </select>
+      <input name="assigned_to" maxlength="100" placeholder="Assignee (optional)">
+      <input name="note" maxlength="2000" placeholder="Investigation note (optional)">
+      <button type="submit">Apply to selected</button>
+    </form>
+    <p id="bulk-status" role="status" aria-live="polite"></p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th><input id="select-all" type="checkbox" aria-label="Select all matching cases"></th><th>Case</th><th>Severity</th><th>Risk</th><th>Detection</th><th>Source</th><th>Status</th><th>Assignee</th><th></th></tr></thead>
+        <tbody>
+        {% for x in incidents %}
+        <tr>
+          <td><input class="incident-select" type="checkbox" value="{{x.id}}" aria-label="Select case {{x.id}}"></td>
+          <td>#{{x.id}}<small>{{x.filename}}</small></td>
+          <td><span class="badge severity-{{x.severity|lower}}">{{x.severity}}</span></td>
+          <td><span class="risk">{% if x.risk_score >= 0 %}{{x.risk_score}}/100{% else %}Not scored{% endif %}</span></td>
+          <td>{{x.attack_type}}{% for tag in x.alert_tags %}<small>{{tag}}</small>{% endfor %}</td>
+          <td>{{x.source_ip}}<small>{{x.affected_user}}</small></td>
+          <td>
+            <select class="inline-status" data-id="{{x.id}}" data-assignee="{{x.assigned_to}}" aria-label="Update status for case {{x.id}}">
+              {% for value in statuses %}
+              <option value="{{value}}" {% if x.status == value %}selected{% endif %}>{{value}}</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td>{{x.assigned_to or "Unassigned"}}</td>
+          <td><a href="/incident/{{x.id}}">Investigate</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="empty">No incidents match these filters.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<script>
+const csrfToken = {{csrf_token|tojson}};
+const uploadForm = document.getElementById("upload-form");
+uploadForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  const status = document.getElementById("upload-status");
+  status.textContent = "Analyzing evidence…";
+  try {
+    const response = await fetch("/upload", {
+      method: "POST",
+      headers: {"X-CSRF-Token": csrfToken},
+      body: new FormData(uploadForm)
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Could not analyze this log.");
+    location.href = "/incident/" + result.id;
+  } catch (error) {
+    status.textContent = error.message;
+  }
+});
+
+document.getElementById("select-all").addEventListener("change", event => {
+  document.querySelectorAll(".incident-select").forEach(box => {
+    box.checked = event.currentTarget.checked;
+  });
+});
+
+document.querySelectorAll(".inline-status").forEach(select => {
+  select.addEventListener("change", async event => {
+    const control = event.currentTarget;
+    const status = document.getElementById("bulk-status");
+    try {
+      const response = await fetch(`/api/incidents/${control.dataset.id}/workflow`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json", "X-CSRF-Token": csrfToken},
+        body: JSON.stringify({status: control.value, assigned_to: control.dataset.assignee || "", note: ""})
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Could not update case status.");
+      status.textContent = `Case #${control.dataset.id} status updated to ${control.value}.`;
+    } catch (error) {
+      status.textContent = error.message;
+    }
+  });
+});
+
+document.getElementById("bulk-workflow-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const status = document.getElementById("bulk-status");
+  const ids = [...document.querySelectorAll(".incident-select:checked")].map(box => Number(box.value));
+  if (!ids.length) {
+    status.textContent = "Select at least one incident.";
+    return;
+  }
+  if (ids.length > 100) {
+    status.textContent = "Select no more than 100 incidents at a time.";
+    return;
+  }
+  const button = form.querySelector("button");
+  button.disabled = true;
+  status.textContent = "Updating selected incidents…";
+  try {
+    const response = await fetch("/api/incidents/bulk-workflow", {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-CSRF-Token": csrfToken},
+      body: JSON.stringify({...Object.fromEntries(new FormData(form)), incident_ids: ids})
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Could not update selected incidents.");
+    location.reload();
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
